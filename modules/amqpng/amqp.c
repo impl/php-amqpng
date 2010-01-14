@@ -57,8 +57,8 @@ static int le_amqp_persistent;
 #define PHP_AMQP_RES_NAME "Amqp Connection"
 
 
-int _php_amqp_error(amqp_rpc_reply_t x, char const *context);
-int _php_amqp_socket_error(int retval, char const *context);
+static int _php_amqp_error(amqp_rpc_reply_t x, char const *context);
+static int _php_amqp_socket_error(int retval, char const *context);
 
 
 typedef struct {
@@ -369,7 +369,7 @@ PHP_FUNCTION(amqp_login)
         RETURN_TRUE;
     }
 
-    if (!_php_amqp_error(amqp_login(amqp_conn->amqp_conn, vhost, channel_max, frame_max, AMQP_SASL_METHOD_PLAIN, user, pass), "Logging in")) {
+    if (!_php_amqp_error(amqp_login(amqp_conn->amqp_conn, vhost, channel_max, frame_max, 0, AMQP_SASL_METHOD_PLAIN, user, pass), "Logging in")) {
         amqp_conn->logged_in = 0;
         RETURN_FALSE;
     };
@@ -514,66 +514,68 @@ PHP_FUNCTION(amqp_basic_publish)
     
     amqp_basic_properties_t props;
     props._flags = 0;
-    
-    FOREACH_KEYVAL(pos, opts, key, opt) {        
-        if (key.type == HASH_KEY_IS_STRING) {
-            #define KEYMATCH(k, s) ((sizeof(s)==k.len) && !strcasecmp(k.str, s))
-            if (KEYMATCH(key, "delivery_mode")) {
-                props._flags += AMQP_BASIC_DELIVERY_MODE_FLAG;
-                props.delivery_mode = (uint8_t) Z_LVAL_PP(opt);
-            }
-            if (KEYMATCH(key, "priority")) {
-                props._flags += AMQP_BASIC_PRIORITY_FLAG;
-                props.priority = (uint8_t) Z_LVAL_PP(opt);
-            }
-            if (KEYMATCH(key, "timestamp")) {
-                props._flags += AMQP_BASIC_TIMESTAMP_FLAG;
-                props.timestamp = (uint64_t) Z_LVAL_PP(opt);
-            }
 
-            if (KEYMATCH(key, "content_type")) {
-                props._flags += AMQP_BASIC_CONTENT_TYPE_FLAG;
-                props.content_type = amqp_cstring_bytes(Z_STRVAL_PP(opt));
-            }
-            if (KEYMATCH(key, "content_encoding")) {
-                props._flags += AMQP_BASIC_CONTENT_ENCODING_FLAG;
-                props.content_encoding = amqp_cstring_bytes(Z_STRVAL_PP(opt));
-            }
-            if (KEYMATCH(key, "correlation_id")) {
-                props._flags += AMQP_BASIC_CORRELATION_ID_FLAG;
-                props.correlation_id = amqp_cstring_bytes(Z_STRVAL_PP(opt));
-            }
-            if (KEYMATCH(key, "reply_to")) {
-                props._flags += AMQP_BASIC_REPLY_TO_FLAG;
-                props.reply_to = amqp_cstring_bytes(Z_STRVAL_PP(opt));
-            }
-            if (KEYMATCH(key, "expiration")) {
-                props._flags += AMQP_BASIC_EXPIRATION_FLAG;
-                props.expiration = amqp_cstring_bytes(Z_STRVAL_PP(opt));
-            }
-            if (KEYMATCH(key, "message_id")) {
-                props._flags += AMQP_BASIC_MESSAGE_ID_FLAG;
-                props.message_id = amqp_cstring_bytes(Z_STRVAL_PP(opt));
-            }
-            if (KEYMATCH(key, "type")) {
-                props._flags += AMQP_BASIC_TYPE_FLAG;
-                props.type = amqp_cstring_bytes(Z_STRVAL_PP(opt));
-            }
-            if (KEYMATCH(key, "user_id")) {
-                props._flags += AMQP_BASIC_USER_ID_FLAG;
-                props.user_id = amqp_cstring_bytes(Z_STRVAL_PP(opt));
-            }
-            if (KEYMATCH(key, "app_id")) {
-                props._flags += AMQP_BASIC_APP_ID_FLAG;
-                props.app_id = amqp_cstring_bytes(Z_STRVAL_PP(opt));
-            }
-            if (KEYMATCH(key, "cluster_id")) {
-                props._flags += AMQP_BASIC_CLUSTER_ID_FLAG;
-                props.cluster_id = amqp_cstring_bytes(Z_STRVAL_PP(opt));
+    if(opts) {
+        FOREACH_KEYVAL(pos, opts, key, opt) {        
+            if (key.type == HASH_KEY_IS_STRING) {
+#define KEYMATCH(k, s) ((sizeof(s)==k.len) && !strcasecmp(k.str, s))
+                if (KEYMATCH(key, "delivery_mode")) {
+                    props._flags += AMQP_BASIC_DELIVERY_MODE_FLAG;
+                    props.delivery_mode = (uint8_t) Z_LVAL_PP(opt);
+                }
+                if (KEYMATCH(key, "priority")) {
+                    props._flags += AMQP_BASIC_PRIORITY_FLAG;
+                    props.priority = (uint8_t) Z_LVAL_PP(opt);
+                }
+                if (KEYMATCH(key, "timestamp")) {
+                    props._flags += AMQP_BASIC_TIMESTAMP_FLAG;
+                    props.timestamp = (uint64_t) Z_LVAL_PP(opt);
+                }
+
+                if (KEYMATCH(key, "content_type")) {
+                    props._flags += AMQP_BASIC_CONTENT_TYPE_FLAG;
+                    props.content_type = amqp_cstring_bytes(Z_STRVAL_PP(opt));
+                }
+                if (KEYMATCH(key, "content_encoding")) {
+                    props._flags += AMQP_BASIC_CONTENT_ENCODING_FLAG;
+                    props.content_encoding = amqp_cstring_bytes(Z_STRVAL_PP(opt));
+                }
+                if (KEYMATCH(key, "correlation_id")) {
+                    props._flags += AMQP_BASIC_CORRELATION_ID_FLAG;
+                    props.correlation_id = amqp_cstring_bytes(Z_STRVAL_PP(opt));
+                }
+                if (KEYMATCH(key, "reply_to")) {
+                    props._flags += AMQP_BASIC_REPLY_TO_FLAG;
+                    props.reply_to = amqp_cstring_bytes(Z_STRVAL_PP(opt));
+                }
+                if (KEYMATCH(key, "expiration")) {
+                    props._flags += AMQP_BASIC_EXPIRATION_FLAG;
+                    props.expiration = amqp_cstring_bytes(Z_STRVAL_PP(opt));
+                }
+                if (KEYMATCH(key, "message_id")) {
+                    props._flags += AMQP_BASIC_MESSAGE_ID_FLAG;
+                    props.message_id = amqp_cstring_bytes(Z_STRVAL_PP(opt));
+                }
+                if (KEYMATCH(key, "type")) {
+                    props._flags += AMQP_BASIC_TYPE_FLAG;
+                    props.type = amqp_cstring_bytes(Z_STRVAL_PP(opt));
+                }
+                if (KEYMATCH(key, "user_id")) {
+                    props._flags += AMQP_BASIC_USER_ID_FLAG;
+                    props.user_id = amqp_cstring_bytes(Z_STRVAL_PP(opt));
+                }
+                if (KEYMATCH(key, "app_id")) {
+                    props._flags += AMQP_BASIC_APP_ID_FLAG;
+                    props.app_id = amqp_cstring_bytes(Z_STRVAL_PP(opt));
+                }
+                if (KEYMATCH(key, "cluster_id")) {
+                    props._flags += AMQP_BASIC_CLUSTER_ID_FLAG;
+                    props.cluster_id = amqp_cstring_bytes(Z_STRVAL_PP(opt));
+                }
             }
         }
     }
-    
+
     int rpc_result = amqp_basic_publish(
         amqp_conn->amqp_conn,
         channel_id,
@@ -646,13 +648,14 @@ PHP_FUNCTION(amqp_exchange_declare)
         .nowait = 0,
         .arguments = {.num_entries = 0, .entries = NULL}
     };
+    amqp_method_number_t srs[] = { AMQP_EXCHANGE_DECLARE_OK_METHOD };
     
     amqp_rpc_reply_t rpc_reply;
     rpc_reply = amqp_simple_rpc(
         amqp_conn->amqp_conn,
         channel_id,
         AMQP_EXCHANGE_DECLARE_METHOD,
-        AMQP_EXCHANGE_DECLARE_OK_METHOD,
+        srs,
         &s);
     
   if (_php_amqp_error(rpc_reply, "ExchangeDeclare")) {
@@ -712,13 +715,14 @@ PHP_FUNCTION(amqp_queue_declare)
         .nowait = 0,    
         .arguments = {.num_entries = 0, .entries = NULL}
     };
+    amqp_method_number_t srs[] = { AMQP_QUEUE_DECLARE_OK_METHOD };
     
     amqp_rpc_reply_t rpc_reply;
     rpc_reply = amqp_simple_rpc(
         amqp_conn->amqp_conn,
         channel_id,
         AMQP_QUEUE_DECLARE_METHOD,
-        AMQP_QUEUE_DECLARE_OK_METHOD,
+        srs,
         &s);
 
     if (_php_amqp_error(rpc_reply, "QueueDeclare")) {
@@ -774,13 +778,14 @@ PHP_FUNCTION(amqp_queue_bind)
         .nowait = 0 ,
         .arguments = {.num_entries = 0, .entries = NULL}
     };
+    amqp_method_number_t srs[] = { AMQP_QUEUE_BIND_OK_METHOD };
     
     amqp_rpc_reply_t rpc_reply;       
     rpc_reply = amqp_simple_rpc(
         amqp_conn->amqp_conn,
         channel_id,
         AMQP_QUEUE_BIND_METHOD,
-        AMQP_QUEUE_BIND_OK_METHOD,
+        srs,
         &s);
     
     if (_php_amqp_error(rpc_reply, "QueueBind")) {
@@ -837,13 +842,14 @@ PHP_FUNCTION(amqp_queue_unbind)
         .routing_key = { .len = routing_key_len, .bytes = routing_key }, 
         .arguments = {.num_entries = 0, .entries = NULL}
     };
+    amqp_method_number_t srs[] = { AMQP_QUEUE_UNBIND_OK_METHOD };
     
     amqp_rpc_reply_t rpc_reply;       
     rpc_reply = amqp_simple_rpc(
         amqp_conn->amqp_conn,
         channel_id,
         AMQP_QUEUE_UNBIND_METHOD,
-        AMQP_QUEUE_UNBIND_OK_METHOD,
+        srs,
         &s);
     
     if (_php_amqp_error(rpc_reply, "QueueUnbind")) {
@@ -893,12 +899,12 @@ int _php_amqp_error(amqp_rpc_reply_t x, char const *context) {
 }
 
 
-int _php_amqp_socket_error(int retval, char const *context) {
+static int _php_amqp_socket_error(int retval, char const *context) {
     if (retval < 0) {
         php_error(E_WARNING, "%s: %s\n", context, strerror(-retval));
-        return 0;
+        return 1;
     }
-    return 1;
+    return 0;
 }
 
 
