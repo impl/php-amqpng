@@ -53,7 +53,7 @@ ZEND_DECLARE_MODULE_GLOBALS(amqp)
 static int le_amqp;
 static int le_amqp_persistent;
 
-#define PHP_AMQP_EXTENSION_VERSION "0.2.0"
+#define PHP_AMQP_EXTENSION_VERSION "0.2.1"
 #define PHP_AMQP_RES_NAME "AMQP Connection"
 
 

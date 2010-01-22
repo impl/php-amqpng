@@ -24,12 +24,10 @@
   <license>PHP license 3.01</license>
   <release>
     <state>beta</state>
-    <version>0.2.0</version>
-    <date>2010-01-20</date>
+    <version>0.2.1</version>
+    <date>2010-01-22</date>
     <notes>
-      * Change package name
-      * Various bugfixes
-      * Slight package restructuring
+      * Fixed memory leaks
     </notes>
   </release>
   <configureoptions>
@@ -46,6 +44,16 @@
     </dir>
   </filelist>
   <changelog>
+    <release>
+      <state>beta</state>
+      <version>0.2.0</version>
+      <date>2010-01-20</date>
+      <notes>
+        * Change package name
+        * Various bugfixes
+        * Slight package restructuring
+      </notes>
+    </release>
     <release>
       <state>beta</state>
       <version>0.0.7</version>
