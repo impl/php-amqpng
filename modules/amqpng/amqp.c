@@ -53,8 +53,8 @@ ZEND_DECLARE_MODULE_GLOBALS(amqp)
 static int le_amqp;
 static int le_amqp_persistent;
 
-#define PHP_AMQP_EXTENSION_VERSION "0.0.7"
-#define PHP_AMQP_RES_NAME "Amqp Connection"
+#define PHP_AMQP_EXTENSION_VERSION "0.2.0"
+#define PHP_AMQP_RES_NAME "AMQP Connection"
 
 
 static int _php_amqp_error(amqp_rpc_reply_t x, char const *context);
@@ -75,13 +75,18 @@ static void _close_amqp_connection(zend_rsrc_list_entry *rsrc TSRMLS_DC)
 {
     amqp_connection *amqp_conn = (amqp_connection *) rsrc->ptr;
     if (amqp_conn) {
-        amqp_channel_close(amqp_conn->amqp_conn, 1, AMQP_REPLY_SUCCESS);
         if (amqp_conn->amqp_conn) {
+            // TODO: Close the right channels? We could probably use resources
+            // for this.
+            amqp_channel_close(amqp_conn->amqp_conn, 1, AMQP_REPLY_SUCCESS);
             amqp_connection_close(amqp_conn->amqp_conn, AMQP_REPLY_SUCCESS);
-            // amqp_destroy_connection(amqp_conn->amqp_conn);
+            amqp_destroy_connection(amqp_conn->amqp_conn);
+            amqp_conn->amqp_conn = NULL;
         }
-        if (amqp_conn->sockfd) {
+
+        if (amqp_conn->sockfd != -1) {
             close(amqp_conn->sockfd);
+            amqp_conn->sockfd = -1;
         }
         efree(amqp_conn);
     }
@@ -97,10 +102,11 @@ static void _close_amqp_pconnection(zend_rsrc_list_entry *rsrc TSRMLS_DC)
         amqp_channel_close(amqp_conn->amqp_conn, 1, AMQP_REPLY_SUCCESS);
         if (amqp_conn->amqp_conn) {
             amqp_connection_close(amqp_conn->amqp_conn, AMQP_REPLY_SUCCESS);
-            // amqp_destroy_connection(amqp_conn->amqp_conn);
+            amqp_destroy_connection(amqp_conn->amqp_conn);
         }
-        if (amqp_conn->sockfd) {
+        if (amqp_conn->sockfd != -1) {
             close(amqp_conn->sockfd);
+            amqp_conn->sockfd = -1;
         }
         pefree(amqp_conn, 1);
     }
@@ -253,7 +259,7 @@ PHP_FUNCTION(amqp_connection_open)
     int hostname_len;
     int port = 5672;
 
-        amqp_connection *amqp_conn = (amqp_connection*)emalloc(sizeof(amqp_connection));
+    amqp_connection *amqp_conn = (amqp_connection*)emalloc(sizeof(amqp_connection));
 
     if (zend_parse_parameters(argc TSRMLS_CC, "sl", &hostname, &hostname_len, &port) == FAILURE) {
         return;
@@ -266,16 +272,17 @@ PHP_FUNCTION(amqp_connection_open)
         RETURN_FALSE;
     }
     if (!(amqp_conn->sockfd = amqp_open_socket(hostname, port))) {
+        amqp_destroy_connection(amqp_conn->amqp_conn);
         efree(amqp_conn);
         php_error(E_WARNING, "Error opening socket.");
         RETURN_FALSE;
     }
     amqp_set_sockfd(amqp_conn->amqp_conn, amqp_conn->sockfd);
     // php_error_docref(NULL TSRMLS_CC, E_NOTICE, "Created normal NON persistent resource!!");
-    
+
     amqp_conn->num_channels = 0;
     amqp_conn->logged_in = 0;
-    
+
     ZEND_REGISTER_RESOURCE(return_value, amqp_conn, le_amqp);
 }
 /* }}} */
@@ -466,9 +473,12 @@ PHP_FUNCTION(amqp_connection_close)
     amqp_conn->logged_in = 0;
 
     amqp_connection_close(amqp_conn->amqp_conn, AMQP_REPLY_SUCCESS);
-    // this cause segfaults ?!
-    // amqp_destroy_connection(amqp_conn->amqp_conn);
+    amqp_destroy_connection(amqp_conn->amqp_conn);
+    amqp_conn->amqp_conn = NULL;
+
     close(amqp_conn->sockfd);
+    amqp_conn->sockfd = -1;
+
     RETURN_TRUE;
 }
 /* }}} */
