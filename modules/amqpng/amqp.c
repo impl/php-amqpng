@@ -883,7 +883,7 @@ int _php_amqp_error(amqp_rpc_reply_t x, char const *context) {
             break;
 
         case AMQP_RESPONSE_LIBRARY_EXCEPTION:
-            php_error(E_WARNING, "%s: %s\n", context, x.library_errno ? strerror(x.library_errno) : "(end-of-stream)");
+            php_error(E_WARNING, "%s: %s\n", context, x.library_error ? strerror(x.library_error) : "(end-of-stream)");
             break;
 
         case AMQP_RESPONSE_SERVER_EXCEPTION:
