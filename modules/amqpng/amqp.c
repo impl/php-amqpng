@@ -27,7 +27,8 @@
 #include "php_globals.h"
 #include "ext/standard/info.h"
 #include "ext/standard/php_string.h"
-
+#include "ext/standard/php_smart_str.h"
+#include "ext/standard/php_var.h"
 
 
 #include "php_amqp.h"
@@ -67,6 +68,11 @@ typedef struct {
     int num_channels;
     int logged_in;
 } amqp_connection;
+
+typedef struct _php_amqp_bytes_le {
+    amqp_bytes_t bytes;
+    struct _php_amqp_bytes_le *next;
+} php_amqp_bytes_le_t;
 
 /**
  * Clean up the connection ...
@@ -375,7 +381,7 @@ PHP_FUNCTION(amqp_login)
         // already logged in, return silently
         RETURN_TRUE;
     }
-
+    
     if (!_php_amqp_error(amqp_login(amqp_conn->amqp_conn, vhost, channel_max, frame_max, 0, AMQP_SASL_METHOD_PLAIN, user, pass), "Logging in")) {
         amqp_conn->logged_in = 0;
         RETURN_FALSE;
@@ -507,8 +513,12 @@ PHP_FUNCTION(amqp_basic_publish)
     HashPosition pos;
     zval *opts = NULL, *old_opts, *new_opts, *add_opts, **opt;
     
-    
     amqp_connection *amqp_conn;
+
+    amqp_table_t headers;
+    amqp_table_entry_t *headers_entries = NULL;
+
+    php_amqp_bytes_le_t *headers_bytes = NULL, *headers_bytes_it = NULL, *headers_bytes_nit = NULL;
 
     if (zend_parse_parameters(argc TSRMLS_CC, "rlsss|bba!/", &connection, &channel_id, &exchange, &exchange_len, &routing_key, &routing_key_len, &body, &body_len, &mandatory, &immediate, &opts) == FAILURE) 
         return;
@@ -549,6 +559,76 @@ PHP_FUNCTION(amqp_basic_publish)
                 if (KEYMATCH(key, "content_encoding")) {
                     props._flags += AMQP_BASIC_CONTENT_ENCODING_FLAG;
                     props.content_encoding = amqp_cstring_bytes(Z_STRVAL_PP(opt));
+                }
+                if (KEYMATCH(key, "headers")) {
+                    if(Z_TYPE_PP(opt) == IS_ARRAY) {
+                        int header_size = zend_hash_num_elements(Z_ARRVAL_PP(opt));
+                        if(header_size) {
+                            HashKey header_key = initHashKey(0);
+                            HashPosition header_pos;
+                            zval **header_val;
+
+                            int entry_offset = 0;
+                            
+                            headers_entries = emalloc(sizeof(amqp_table_entry_t) * header_size);
+
+                            FOREACH_KEYVAL(header_pos, *opt, header_key, header_val) {
+                                headers_entries[entry_offset].key = amqp_cstring_bytes(header_key.str);
+
+                                switch(Z_TYPE_PP(header_val)) {
+                                case IS_STRING:
+                                    headers_entries[entry_offset].value.kind = AMQP_FIELD_KIND_UTF8;
+                                    headers_entries[entry_offset].value.value.bytes = amqp_cstring_bytes(Z_STRVAL_PP(header_val));
+                                    break;
+                                case IS_LONG:
+                                    headers_entries[entry_offset].value.kind = AMQP_FIELD_KIND_I64;
+                                    headers_entries[entry_offset].value.value.i64 = Z_LVAL_PP(header_val);
+                                    break;
+                                case IS_DOUBLE:
+                                    headers_entries[entry_offset].value.kind = AMQP_FIELD_KIND_F64;
+                                    headers_entries[entry_offset].value.value.f64 = Z_DVAL_PP(header_val);
+                                    break;
+                                case IS_BOOL:
+                                    headers_entries[entry_offset].value.kind = AMQP_FIELD_KIND_BOOLEAN;
+                                    headers_entries[entry_offset].value.value.boolean = Z_BVAL_PP(header_val);
+                                    break;
+                                default: {
+                                    /* Serialize */
+                                    php_serialize_data_t serialized;
+                                    smart_str buf = { 0 };
+                                    zval *header_val_copy = *header_val;
+                                    zval_copy_ctor(header_val_copy);
+
+                                    PHP_VAR_SERIALIZE_INIT(serialized);
+                                    php_var_serialize(&buf, &header_val_copy, &serialized TSRMLS_CC);
+                                    PHP_VAR_SERIALIZE_DESTROY(serialized);
+
+                                    zval_dtor(header_val_copy);
+
+                                    amqp_bytes_t bytes = amqp_bytes_malloc_dup(amqp_cstring_bytes(buf.c));
+                                    headers_entries[entry_offset].value.kind = AMQP_FIELD_KIND_UTF8;
+                                    headers_entries[entry_offset].value.value.bytes = bytes;
+
+                                    php_amqp_bytes_le_t *headers_bytes_entry = emalloc(sizeof(php_amqp_bytes_le_t));
+                                    headers_bytes_entry->bytes = bytes;
+                                    headers_bytes_entry->next = headers_bytes;
+                                    headers_bytes = headers_bytes_entry;
+
+                                    smart_str_free(&buf);
+                                    break;
+                                }
+                                }
+
+                                entry_offset++;
+                            }
+
+                            headers.num_entries = header_size;
+                            headers.entries = headers_entries;
+
+                            props._flags += AMQP_BASIC_HEADERS_FLAG;
+                            props.headers = headers;
+                        }
+                    }
                 }
                 if (KEYMATCH(key, "correlation_id")) {
                     props._flags += AMQP_BASIC_CORRELATION_ID_FLAG;
@@ -595,6 +675,16 @@ PHP_FUNCTION(amqp_basic_publish)
         immediate ? 1 : 0,
         &props,
         (amqp_bytes_t) {.len = body_len, .bytes = body});
+
+    for (headers_bytes_it = headers_bytes, headers_bytes_nit = headers_bytes_it == NULL ? NULL : headers_bytes_it->next;
+         headers_bytes_it != NULL;
+         headers_bytes_it = headers_bytes_nit) {
+        amqp_bytes_free(headers_bytes_it->bytes);
+        efree(headers_bytes_it);
+    }
+    if (headers_entries != NULL) {
+        efree(headers_entries);
+    }
 
     if (_php_amqp_socket_error(rpc_result, "BasicPublish")) {
         RETURN_FALSE;
