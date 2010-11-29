@@ -22,16 +22,16 @@
     Support for the AMQP (Advanced Message Queuing Protocol) using librabbitmq.
   </description>
   <license>PHP license 3.01</license>
-  <release>
-    <state>beta</state>
-    <version>0.2.1</version>
-    <date>2010-01-22</date>
-    <notes>
-      * Fixed memory leaks
-    </notes>
-  </release>
   <configureoptions>
   </configureoptions>
+  <release>
+    <state>beta</state>
+    <version>0.2.2</version>
+    <date>2010-11-09</date>
+    <notes>
+      * Added support for header fields in properties
+    </notes>
+  </release>
   <filelist>
     <file role="doc" name="CREDITS" />
     <file role="doc" name="INSTALL" />
@@ -44,6 +44,14 @@
     </dir>
   </filelist>
   <changelog>
+    <release>
+      <state>beta</state>
+      <version>0.2.1</version>
+      <date>2010-01-22</date>
+      <notes>
+        * Fixed memory leaks
+      </notes>
+    </release>
     <release>
       <state>beta</state>
       <version>0.2.0</version>
